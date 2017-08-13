@@ -71,7 +71,7 @@ def find_revision_of_next_file_in_the_sequence(revisions)
 end
 
 if ARGV.length != 1
-    puts "Usage: alembic-rev-graph [/ABSOLUTE/PATH/TO/ALEMBIC/VERSIONS]"
+    puts "Usage: alembic-rev-graph [PATH/OF/ALEMBIC/VERSIONS/FOLDER]"
     exit 1
 end
 
