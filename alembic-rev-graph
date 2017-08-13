@@ -70,14 +70,13 @@ def find_revision_of_next_file_in_the_sequence(revisions)
     return revisions
 end
 
-if ARGV.length != 1
+dir_path = ARGV.first || '.'
+file_paths = Dir[File.join(dir_path, '/*.py')].sort
+if file_paths.size == 0
     puts "Usage: alembic-rev-graph [PATH/OF/ALEMBIC/VERSIONS/FOLDER]"
     exit 1
 end
 
-absolute_path = ARGV.first
-
-file_paths = Dir[File.join(absolute_path, '/*.py')].sort
 revisions = file_paths.map {|file| extract_revision_info_from(file)}
 revisions = recoganise_invalid_previous_revision(revisions)
 revisions = find_revision_of_next_file_in_the_sequence(revisions)
