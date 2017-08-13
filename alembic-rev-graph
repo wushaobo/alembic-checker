@@ -1,0 +1,87 @@
+#!/usr/bin/env ruby
+
+def extract_revision_info_from(file_path)
+    revision = {}
+    revision[:file_name] = File.basename(file_path)
+
+    File.readlines(file_path).each do |line| 
+        if line[/^revision = /]
+            revision[:current_r] = line.gsub(/^revision = '(.+)'\n$/, '\1')
+            next
+        end
+
+        if line[/^down_revision = /]
+            revision[:previous_r] = line.gsub(/^down_revision = (.+)\n$/, '\1').gsub('\'', '').gsub('None', 'base')
+            break
+        end
+    end
+
+    return revision
+end
+
+def generate_graphviz_content(revisions)
+    lines = []
+    lines << "digraph revisions {\n"
+    lines << "\tsize = \"150,150\";\n"
+    lines << "\tnode [shape = record];\n"
+    lines << %Q{\tnodebase[label = "<revision> base version"];\n}
+    lines += revisions.map {|r| %Q{\tnode#{r[:current_r]}[label = "<revision> #{r[:current_r]} | <file_name> #{r[:file_name]}"];\n} }
+    lines += revisions.map {|r| 
+        %Q{\t"node#{r[:previous_r]}":revision -> "node#{r[:current_r]}":revision;\n} 
+    }
+    lines += revisions.map {|r| 
+        next if r[:r_of_next_file] == 'upcoming'
+        %Q{\t"node#{r[:current_r]}":file_name -> "node#{r[:r_of_next_file]}":file_name;\n} 
+    }
+    lines << "}\n"
+    return lines
+end
+
+def output_to_file(lines, output_file='/tmp/_graph.dot.svg')
+    dot_file = '/tmp/_graph.dot'
+    File.open(dot_file, 'w') do |file|
+        lines.each {|line| file.write line}
+    end
+
+    `dot -Tsvg #{dot_file} -o #{output_file}`
+    return output_file
+end
+
+def recoganise_invalid_previous_revision(revisions)
+    all_existing_revisions = revisions.map{|r| r[:current_r]}
+    revisions.each do |r|
+        unless all_existing_revisions.include? r[:previous_r]
+            r[:previous_r] = 'base'
+        end
+    end
+    return revisions
+end
+
+def find_revision_of_next_file_in_the_sequence(revisions)
+    revisions.each_with_index do |r, idx|
+        if idx == revisions.length - 1
+            r[:r_of_next_file] = "upcoming"
+            break
+        end
+        next_file = revisions[idx + 1]
+        r[:r_of_next_file] = next_file[:current_r]
+        r
+    end
+    return revisions
+end
+
+if ARGV.length != 1
+    puts "Usage: alembic-rev-graph [/ABSOLUTE/PATH/TO/ALEMBIC/VERSIONS]"
+    exit 1
+end
+
+absolute_path = ARGV.first
+
+file_paths = Dir[File.join(absolute_path, '/*.py')].sort
+revisions = file_paths.map {|file| extract_revision_info_from(file)}
+revisions = recoganise_invalid_previous_revision(revisions)
+revisions = find_revision_of_next_file_in_the_sequence(revisions)
+output_file = output_to_file(generate_graphviz_content(revisions))
+
+puts "output file path: #{output_file}"
+`open -a Safari #{output_file}`
